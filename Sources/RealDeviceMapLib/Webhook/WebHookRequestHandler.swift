@@ -195,6 +195,7 @@ public class WebHookRequestHandler {
         var fortSearch = [FortSearchOutProto]()
         var mapForts = [GetMapFortsOutProto.FortProto]()
         var encounters = [EncounterOutProto]()
+        var tappables = [ProcessTappableOutProto]()
         var encountersBelowLevelThirty = 0
         var diskEncounters = [DiskEncounterOutProto]()
         var playerdatas = [GetPlayerOutProto]()
@@ -236,6 +237,9 @@ public class WebHookRequestHandler {
             } else if let gmf = rawData["GetMapForts"] as? String {
                 data = Data(base64Encoded: gmf) ?? Data()
                 method = 1401
+            } else if let ptp = rawData["ProcessTappableProto"] as? String {
+                data = Data(base64Encoded: ptp) ?? Data()
+                method = 1408
             } else if let dataString = rawData["data"] as? String {
                 data = Data(base64Encoded: dataString) ?? Data()
                 method = rawData["method"] as? Int ?? 106
@@ -439,6 +443,20 @@ public class WebHookRequestHandler {
                 } else {
                     Log.warning(message: "[WebHookRequestHandler] [\(uuid ?? "?")] Malformed GetMapFortsResponse")
                 }
+            } else if method == 1408 {
+                if trainerLevel >= 30 {
+                    if let enr = try? ProcessTappableOutProto(serializedData: data) {
+                        if enr.status != ProcessTappableOutProto.Status.success {
+                            Log.debug(message: "[WebHookRequestHandler] [\(uuid ?? "?")] Ignored non-success " +
+                                "ProcessTappableOutProto: \(enr.status)")
+                            continue
+                        }
+                        tappables.append(enr)
+                    } else {
+                        Log.warning(message: "[WebHookRequestHandler] [\(uuid ?? "?")] Malformed EncounterResponse")
+                    }
+                } else {
+                    encountersBelowLevelThirty += 1
             }
         }
 
@@ -481,6 +499,9 @@ public class WebHookRequestHandler {
             }
             if rawDebugTypes.contains("GymGetInfoResponse") && !gymInfos.isEmpty {
                 Log.debug(message: "[WebhookRequestHandler] [\(uuid ?? "?")] gymInfos: \(gymInfos)")
+            }
+            if rawDebugTypes.contains("ProcessTappableProto") && !tappables.isEmpty {
+                Log.debug(message: "[WebhookRequestHandler] [\(uuid ?? "?")] tappables: \(tappables)")
             }
         }
 
@@ -550,7 +571,7 @@ public class WebHookRequestHandler {
 
         var data = ["nearby": nearbyPokemons.count, "wild": wildPokemons.count, "map": mapPokemons.count,
                     "forts": forts.count, "quests": quests.count, "encounters": encounters.count,
-                    "disk_encounters": diskEncounters.count, "level": trainerLevel as Any,
+                    "tappables": tappables.count, "disk_encounters": diskEncounters.count, "level": trainerLevel as Any,
                     "only_empty_gmos": containsGMO && isEmtpyGMO, "fort_search": fortSearch.count,
                     "only_invalid_gmos": containsGMO && isInvalidGMO, "contains_gmos": containsGMO
         ]
